@@ -12,7 +12,7 @@ the whole internet unless you say so explicitly. See
 
 ```hcl
 module "firewall" {
-  source = "github.com/moveeeax/terraform-google-firewall"
+  source = "github.com/moveeeax/terraform-google-firewall?ref=v1.0.0"
 
   project_id = var.project_id
   name       = "allow-ssh"
