@@ -11,6 +11,9 @@ locals {
     setintersection(toset(var.source_ranges), toset(local.world_open_cidrs))
   ) > 0
 
+  uses_tags             = length(var.source_tags) > 0 || length(var.target_tags) > 0
+  uses_service_accounts = length(var.source_service_accounts) > 0 || length(var.target_service_accounts) > 0
+
   # Remote administration and datastore ports. Reaching any of these from the
   # internet is almost always a mistake, so it needs an explicit opt-in.
   restricted_ports = {
@@ -60,9 +63,12 @@ resource "google_compute_firewall" "this" {
   priority    = var.priority
   description = var.description
 
-  source_ranges      = length(var.source_ranges) > 0 ? var.source_ranges : null
-  destination_ranges = length(var.destination_ranges) > 0 ? var.destination_ranges : null
-  target_tags        = length(var.target_tags) > 0 ? var.target_tags : null
+  source_ranges           = length(var.source_ranges) > 0 ? var.source_ranges : null
+  source_tags             = length(var.source_tags) > 0 ? var.source_tags : null
+  source_service_accounts = length(var.source_service_accounts) > 0 ? var.source_service_accounts : null
+  destination_ranges      = length(var.destination_ranges) > 0 ? var.destination_ranges : null
+  target_tags             = length(var.target_tags) > 0 ? var.target_tags : null
+  target_service_accounts = length(var.target_service_accounts) > 0 ? var.target_service_accounts : null
 
   dynamic "allow" {
     for_each = var.allow
@@ -96,19 +102,30 @@ resource "google_compute_firewall" "this" {
       error_message = "Exactly one of `allow` or `deny` must be set: a Google Cloud firewall rule is either an allow rule or a deny rule, never both and never neither."
     }
 
-    # Google Cloud treats an INGRESS rule with no source as 0.0.0.0/0. This
-    # module does not expose source_tags or source_service_accounts, so
-    # source_ranges is the only way to scope an ingress rule.
+    # An INGRESS rule needs at least one source. Without one Google Cloud
+    # treats the rule as open to 0.0.0.0/0.
     precondition {
-      condition     = var.direction != "INGRESS" || length(var.source_ranges) > 0
-      error_message = "`source_ranges` must be set for INGRESS rules; an ingress rule with no source applies to every source address on the internet."
+      condition = var.direction != "INGRESS" || (
+        length(var.source_ranges) + length(var.source_tags) + length(var.source_service_accounts)
+      ) > 0
+      error_message = "INGRESS rules need a source: set `source_ranges`, `source_tags` or `source_service_accounts`. An ingress rule with no source applies to every source address on the internet."
     }
 
     # The source of an EGRESS rule is always the instance itself; Google Cloud
-    # rejects sourceRanges on egress rules.
+    # rejects every source field on egress rules.
     precondition {
-      condition     = var.direction != "EGRESS" || length(var.source_ranges) == 0
-      error_message = "`source_ranges` cannot be used on EGRESS rules; scope the destination with `destination_ranges` instead."
+      condition = var.direction != "EGRESS" || (
+        length(var.source_ranges) + length(var.source_tags) + length(var.source_service_accounts)
+      ) == 0
+      error_message = "`source_ranges`, `source_tags` and `source_service_accounts` cannot be used on EGRESS rules; scope the destination with `destination_ranges` and the instances with `target_tags` or `target_service_accounts` instead."
+    }
+
+    # Google Cloud does not let one rule mix network tags and service accounts,
+    # on either side: sourceServiceAccounts and targetServiceAccounts each
+    # conflict with both sourceTags and targetTags.
+    precondition {
+      condition     = !(local.uses_tags && local.uses_service_accounts)
+      error_message = "A firewall rule cannot mix network tags (`source_tags`, `target_tags`) with service accounts (`source_service_accounts`, `target_service_accounts`). Use tags or service accounts for the whole rule."
     }
 
     # The guardrail: no world-open administration or datastore ports unless the

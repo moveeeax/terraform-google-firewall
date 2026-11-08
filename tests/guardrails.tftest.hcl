@@ -202,3 +202,88 @@ run "rejects_malformed_cidr" {
 
   expect_failures = [var.source_ranges]
 }
+
+run "rejects_source_tags_with_target_service_accounts" {
+  command = plan
+
+  variables {
+    allow                   = { tcp = ["443"] }
+    source_tags             = ["frontend"]
+    target_service_accounts = ["db@example-project.iam.gserviceaccount.com"]
+  }
+
+  expect_failures = [google_compute_firewall.this]
+}
+
+run "rejects_source_service_accounts_with_target_tags" {
+  command = plan
+
+  variables {
+    allow                   = { tcp = ["443"] }
+    source_service_accounts = ["app@example-project.iam.gserviceaccount.com"]
+    target_tags             = ["backend"]
+  }
+
+  expect_failures = [google_compute_firewall.this]
+}
+
+run "rejects_source_tags_with_source_service_accounts" {
+  command = plan
+
+  variables {
+    allow                   = { tcp = ["443"] }
+    source_tags             = ["frontend"]
+    source_service_accounts = ["app@example-project.iam.gserviceaccount.com"]
+  }
+
+  expect_failures = [google_compute_firewall.this]
+}
+
+run "rejects_source_tags_on_egress" {
+  command = plan
+
+  variables {
+    direction          = "EGRESS"
+    allow              = { tcp = ["443"] }
+    destination_ranges = ["10.0.0.0/8"]
+    source_tags        = ["frontend"]
+  }
+
+  expect_failures = [google_compute_firewall.this]
+}
+
+run "rejects_source_service_accounts_on_egress" {
+  command = plan
+
+  variables {
+    direction               = "EGRESS"
+    allow                   = { tcp = ["443"] }
+    destination_ranges      = ["10.0.0.0/8"]
+    source_service_accounts = ["app@example-project.iam.gserviceaccount.com"]
+  }
+
+  expect_failures = [google_compute_firewall.this]
+}
+
+run "rejects_malformed_service_account" {
+  command = plan
+
+  variables {
+    allow                   = { tcp = ["443"] }
+    source_service_accounts = ["not-an-email"]
+  }
+
+  expect_failures = [var.source_service_accounts]
+}
+
+run "rejects_malformed_target_service_account" {
+  command = plan
+
+  variables {
+    allow                   = { tcp = ["443"] }
+    source_ranges           = ["10.0.0.0/8"]
+    target_service_accounts = ["not-an-email"]
+  }
+
+  expect_failures = [var.target_service_accounts]
+}

@@ -6,8 +6,20 @@ All notable changes to this module are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `source_tags`, `source_service_accounts` and `target_service_accounts`
+  inputs, so ingress rules can be scoped by network tag or service account
+  instead of a CIDR. All default to `[]` and are sent as null when empty, so
+  existing rules plan unchanged.
+- Plan-time checks: a rule cannot mix network tags with service accounts,
+  `source_tags` and `source_service_accounts` are rejected on `EGRESS` rules,
+  and service account entries must look like an email address.
+
 ### Changed
 
+- The `INGRESS` source check now accepts `source_ranges`, `source_tags` or
+  `source_service_accounts`; previously only `source_ranges` satisfied it.
 - CI: bump actions to their current majors, pin tool versions, and restrict the
   workflow token to `contents: read`.
 - CI: add Dependabot for GitHub Actions and the Terraform provider.

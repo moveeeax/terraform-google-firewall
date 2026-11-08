@@ -76,6 +76,23 @@ variable "source_ranges" {
   }
 }
 
+variable "source_tags" {
+  description = "Network tags of the source instances for INGRESS rules. Matches traffic from the internal IPs of instances carrying any of these tags. Cannot be combined with service accounts on the same rule."
+  type        = list(string)
+  default     = []
+}
+
+variable "source_service_accounts" {
+  description = "Service account emails of the source instances for INGRESS rules. Matches traffic from the internal IPs of instances running as any of these accounts. Cannot be combined with network tags on the same rule."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for email in var.source_service_accounts : can(regex("^[^@\\s]+@[^@\\s]+$", email))])
+    error_message = "Every entry in source_service_accounts must be a service account email, e.g. \"app@example-project.iam.gserviceaccount.com\"."
+  }
+}
+
 variable "destination_ranges" {
   description = "Destination CIDR ranges for EGRESS rules."
   type        = list(string)
@@ -88,9 +105,20 @@ variable "destination_ranges" {
 }
 
 variable "target_tags" {
-  description = "Instance network tags the rule applies to. Empty applies the rule to every instance in the network."
+  description = "Instance network tags the rule applies to. Cannot be combined with service accounts on the same rule. Empty, together with empty `target_service_accounts`, applies the rule to every instance in the network."
   type        = list(string)
   default     = []
+}
+
+variable "target_service_accounts" {
+  description = "Service account emails of the instances the rule applies to. Cannot be combined with network tags on the same rule. Empty, together with empty `target_tags`, applies the rule to every instance in the network."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for email in var.target_service_accounts : can(regex("^[^@\\s]+@[^@\\s]+$", email))])
+    error_message = "Every entry in target_service_accounts must be a service account email, e.g. \"app@example-project.iam.gserviceaccount.com\"."
+  }
 }
 
 variable "allow_public_admin_ports" {
