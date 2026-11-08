@@ -87,3 +87,88 @@ run "egress_rule" {
     error_message = "deny blocks should be rendered from the deny map."
   }
 }
+
+run "new_scoping_fields_default_to_null" {
+  variables {
+    allow         = { tcp = ["443"] }
+    source_ranges = ["10.0.0.0/8"]
+  }
+
+  assert {
+    condition     = google_compute_firewall.this.source_tags == null
+    error_message = "source_tags must stay unset when not given, so existing rules plan unchanged."
+  }
+
+  assert {
+    condition     = google_compute_firewall.this.source_service_accounts == null
+    error_message = "source_service_accounts must stay unset when not given, so existing rules plan unchanged."
+  }
+
+  assert {
+    condition     = google_compute_firewall.this.target_service_accounts == null
+    error_message = "target_service_accounts must stay unset when not given, so existing rules plan unchanged."
+  }
+}
+
+run "ingress_scoped_by_service_accounts" {
+  variables {
+    allow                   = { tcp = ["5432"] }
+    source_service_accounts = ["app@example-project.iam.gserviceaccount.com"]
+    target_service_accounts = ["db@example-project.iam.gserviceaccount.com"]
+  }
+
+  assert {
+    condition     = google_compute_firewall.this.source_ranges == null
+    error_message = "A service-account-scoped rule must not need source_ranges."
+  }
+
+  assert {
+    condition     = contains(google_compute_firewall.this.source_service_accounts, "app@example-project.iam.gserviceaccount.com")
+    error_message = "source_service_accounts should be passed through."
+  }
+
+  assert {
+    condition     = contains(google_compute_firewall.this.target_service_accounts, "db@example-project.iam.gserviceaccount.com")
+    error_message = "target_service_accounts should be passed through."
+  }
+}
+
+run "ingress_scoped_by_source_tags" {
+  variables {
+    allow       = { tcp = ["8080"] }
+    source_tags = ["frontend"]
+    target_tags = ["backend"]
+  }
+
+  assert {
+    condition     = contains(google_compute_firewall.this.source_tags, "frontend")
+    error_message = "source_tags should be passed through."
+  }
+}
+
+run "source_ranges_and_service_accounts_together" {
+  variables {
+    allow                   = { tcp = ["443"] }
+    source_ranges           = ["10.10.0.0/16"]
+    source_service_accounts = ["app@example-project.iam.gserviceaccount.com"]
+  }
+
+  assert {
+    condition     = contains(google_compute_firewall.this.source_ranges, "10.10.0.0/16") && length(google_compute_firewall.this.source_service_accounts) == 1
+    error_message = "source_ranges and source_service_accounts may be combined; Google Cloud matches either."
+  }
+}
+
+run "egress_scoped_by_target_service_account" {
+  variables {
+    direction               = "EGRESS"
+    deny                    = { all = [] }
+    destination_ranges      = ["0.0.0.0/0"]
+    target_service_accounts = ["batch@example-project.iam.gserviceaccount.com"]
+  }
+
+  assert {
+    condition     = contains(google_compute_firewall.this.target_service_accounts, "batch@example-project.iam.gserviceaccount.com")
+    error_message = "target_service_accounts should be usable on egress rules."
+  }
+}
